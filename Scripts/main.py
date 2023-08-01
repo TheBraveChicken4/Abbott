@@ -2,7 +2,7 @@ import openai
 import speech_recognition
 import pyttsx3
 import re
-import os
+
 
 
 # Possibly add a sleep function so that the program is only listening for the word wake up or something
