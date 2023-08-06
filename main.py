@@ -1,4 +1,5 @@
 import openai
+import pyaudio
 import speech_recognition
 import pyttsx3
 import re
@@ -16,10 +17,11 @@ import pvporcupine
 
 #Initializing pvporcupine wake word stuff
 ACCESS_KEY = open("paccess_key", "r").read()
-KEYWORD_FILE_PATH = open("wake_words", "r").read()
+KEYWORD_FILE_PATH = r"C:\Users\josh\PycharmProjects\abbott\wake_word\hey-abbott_en_windows_v2_2_0.ppn"
+print(KEYWORD_FILE_PATH)
 
-porcupine = pvporcupine.create(access_key=ACCESS_KEY, keyword_paths=KEYWORD_FILE_PATH)
-recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
+
+# recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
 
 # Chat GPT Integration
 API_KEY = open("API_KEY", "r").read()
@@ -37,7 +39,29 @@ def listening_for_wake():
     porcupine = None
     pa = None
     audio_stream = None
+    try:
+        porcupine = pvporcupine.create(access_key=ACCESS_KEY, keyword_paths=[KEYWORD_FILE_PATH])
+        pa = pyaudio.PyAudio()
+        audio_stream = pa.open(
+                    rate=porcupine.sample_rate,
+                    channels=1,
+                    format=pyaudio.paInt16,
+                    input=True,
+                    frames_per_buffer=porcupine.frame_length)
+        while True:
+            pcm = audio_stream.read(porcupine.frame_length)
+            pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
 
+            keyword_index = porcupine.process(pcm)
+            if keyword_index >= 0:
+                print("Wake word detected .. ")
+
+                #Main speaking functionality here
+                return True
+                time.sleep(1)
+    finally:
+        if porcupine is not None:
+            porcupine.delete()
 
 def quit(inp):
     if inp == 'shut down':
@@ -96,14 +120,15 @@ def speaking():
     while True:
 
         try:
-
+            print("entering try")
             recognizer.adjust_for_ambient_noise(mic, duration=0.5)
-            audio = recognizer.listen(mic)
-            text = recognizer.recognize_google(audio, key=None, language='en-IN')
-            text = text.lower()
+            # audio = recognizer.listen(mic)
+            # text = recognizer.recognize_google(audio, key=None, language='en-IN')
+            # text = text.lower()
+
             print(f"User: {text}")
 
-            sleep_words = ["goodbye abbott", "goodbye", "bye", "bye abbott", "talk to you later"]
+            sleep_words = ["goodbye abbott", "goodbye", "bye", "bye abbott", "talk to you later","thank you"]
             for word in sleep_words:
                 abbott_regex = re.search(word, text)
                 if abbott_regex != None:
@@ -129,7 +154,7 @@ def speaking():
             chat_log.append({"role": "assistant", "content": abbott_response.strip("\n").strip()})
 
         except Exception as e:
-
+            print("entering except")
             # abbott.say("I'm sorry, I didn't catch that. Can you please repeat?")
             pass
 
@@ -148,32 +173,33 @@ print("Listening...")
 
 # Main program loop
 while True:
-    print(pvporcupine.KEYWORDS)
     # try:
     print("entering try")
-    with speech_recognition.Microphone() as mic:
-        recognizer.adjust_for_ambient_noise(mic, duration=0.5)
-        # audio = recognizer.record(mic, duration=5)
-        print("listening")
-        #Abbotts main issue rn is with this line of code, sometimes the program just does not stop listening
-        audio = recognizer.listen(mic)
-        recognizer.pause_threshold = 3
+    if listening_for_wake():
+        speaking()
+        # with speech_recognition.Microphone() as mic:
+        #     recognizer.adjust_for_ambient_noise(mic, duration=0.5)
+        #     # audio = recognizer.record(mic, duration=5)
+        #     print("listening")
+        #     #Abbotts main issue rn is with this line of code, sometimes the program just does not stop listening
+        #     audio = recognizer.listen(mic)
+        #     recognizer.pause_threshold = 3
+        #
+        #     print("done listening")
+        #     text = recognizer.recognize_google(audio, key=None, language='en-IN')
+        #     text = text.lower()
+        #     print(text)
 
-        print("done listening")
-        text = recognizer.recognize_google(audio, key=None, language='en-IN')
-        text = text.lower()
-        print(text)
-
-        if check_for_wake(text):
-            speaking()
+            # if check_for_wake(text):
+            #     speaking()
 
         if quit(text):
             break
 
-        if re.search('abbott what are you', text) != None:
+        if re.search('what are you', text) != None:
             abbott_description()
 
-        if re.search('abbott what time is it', text) != None:
+        if re.search('what time is it', text) != None:
             tell_time()
 
     # except Exception as e:
