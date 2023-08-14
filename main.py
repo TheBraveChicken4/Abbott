@@ -7,21 +7,21 @@ import wave
 import time
 import struct
 import pvporcupine
+import pvcheetah
+from pvrecorder import PvRecorder
+
 
 
 # Possibly add a sleep function so that the program is only listening for the word wake up or something
 # Try to optimize performance if im gonna have it running all the time
-# Try to implement a way to have the prorgam keep listening as you keep speaking.
-#Its annoying to have to try and time your input and having it break if you mess it up
-# what time is it abbott
+#figure out how to import local files and clean up this code so that it runs smoother
+
+
 
 #Initializing pvporcupine wake word stuff
 ACCESS_KEY = open("paccess_key", "r").read()
 KEYWORD_FILE_PATH = r"C:\Users\josh\PycharmProjects\abbott\wake_word\hey-abbott_en_windows_v2_2_0.ppn"
-print(KEYWORD_FILE_PATH)
 
-
-# recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
 
 # Chat GPT Integration
 API_KEY = open("API_KEY", "r").read()
@@ -35,6 +35,36 @@ abbott.setProperty('rate', 175)
 abbott.setProperty('voice', voices[2].id)
 
 
+def general_speech_to_text():
+    full_text = ''
+    try:
+        cheetah = pvcheetah.create(access_key=ACCESS_KEY, endpoint_duration_sec=2.5)
+        recorder = PvRecorder(device_index=-1, frame_length=cheetah.frame_length)
+        recorder.start()
+        print("listening... recorder in process")
+        try:
+
+            while True:
+
+                partial_transcript, is_endpoint = cheetah.process(recorder.read())
+                full_text += partial_transcript
+                if is_endpoint:
+                    final_transcript = cheetah.flush()
+                    full_text += final_transcript
+                    break
+
+        finally:
+            print('done listening')
+            recorder.stop()
+
+    finally:
+        print(full_text)
+        cheetah.delete()
+        return str(full_text)
+
+
+
+# Function to check for wake word and end up calling speaking()
 def listening_for_wake():
     porcupine = None
     pa = None
@@ -78,17 +108,6 @@ def abbott_description():
 
     abbott.runAndWait()
 
-# Function to check for wake word and end up calling speaking()
-def check_for_wake(string):
-
-    wake_word_list = ["hey abbott"]
-    for word in wake_word_list:
-
-        regex = re.search(word, string)
-
-        if regex != None:
-            return True
-    return False
 
 # check if there is a func from this module that does this more efficiently
 def tell_time():
@@ -111,51 +130,57 @@ def tell_time():
 # Function for chat gpt responses and assistant like behavior
 def speaking():
 
-    abbott.say("Hello, what can I do for you today")
+    abbott.say("What can I do for you today?")
     abbott.runAndWait()
-
-#Figure out how to wait a long time to capture input, but as soon as input is captured and there is no more
-#speaking then stop the recording and answer the prompt
 
     while True:
 
         try:
-            print("entering try")
-            recognizer.adjust_for_ambient_noise(mic, duration=0.5)
-            # audio = recognizer.listen(mic)
-            # text = recognizer.recognize_google(audio, key=None, language='en-IN')
-            # text = text.lower()
+            print("entering speech try")
 
-            print(f"User: {text}")
+            text = general_speech_to_text()
+            text = text.lower()
+            print(text)
+            if quit(text):
+                break
 
-            sleep_words = ["goodbye abbott", "goodbye", "bye", "bye abbott", "talk to you later","thank you"]
-            for word in sleep_words:
-                abbott_regex = re.search(word, text)
-                if abbott_regex != None:
-                    abbott.say("Goodbye sir, have a nice day")
-                    abbott.runAndWait()
-                    return
+            if re.search('what are you', text) != None:
+                abbott_description()
+                pass
 
-            chat_log.append({"role": "user", "content": text})
-            print("chatbot started")
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=chat_log
-            )
+            if re.search('what time is it', text) != None:
+                tell_time()
+                pass
+            else:
+                print(f"User: {text}")
 
-            abbott_response = response['choices'][0]['message']['content']
-            abbott_response = abbott_response.strip("\n").strip()
+                sleep_words = ["goodbye abbott", "goodbye", "bye", "bye abbott", "talk to you later","thank you"]
+                for word in sleep_words:
+                    abbott_regex = re.search(word, text)
+                    if abbott_regex != None:
+                        abbott.say("Goodbye sir, have a nice day")
+                        abbott.runAndWait()
+                        return
 
-            print("Abbott:", abbott_response)
-            abbott.say(abbott_response)
-            abbott.runAndWait()
+                chat_log.append({"role": "user", "content": text})
+                print("chatbot started")
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=chat_log
+                )
+
+                abbott_response = response['choices'][0]['message']['content']
+                abbott_response = abbott_response.strip("\n").strip()
+
+                print("Abbott:", abbott_response)
+                abbott.say(abbott_response)
+                abbott.runAndWait()
 
 
-            chat_log.append({"role": "assistant", "content": abbott_response.strip("\n").strip()})
+                chat_log.append({"role": "assistant", "content": abbott_response.strip("\n").strip()})
 
         except Exception as e:
-            print("entering except")
-            # abbott.say("I'm sorry, I didn't catch that. Can you please repeat?")
+            print("entering speech except")
             pass
 
 
@@ -174,35 +199,15 @@ print("Listening...")
 # Main program loop
 while True:
     # try:
-    print("entering try")
+    print("entering main try")
     if listening_for_wake():
+        # time.sleep(0.5)
         speaking()
-        # with speech_recognition.Microphone() as mic:
-        #     recognizer.adjust_for_ambient_noise(mic, duration=0.5)
-        #     # audio = recognizer.record(mic, duration=5)
-        #     print("listening")
-        #     #Abbotts main issue rn is with this line of code, sometimes the program just does not stop listening
-        #     audio = recognizer.listen(mic)
-        #     recognizer.pause_threshold = 3
-        #
-        #     print("done listening")
-        #     text = recognizer.recognize_google(audio, key=None, language='en-IN')
-        #     text = text.lower()
-        #     print(text)
 
-            # if check_for_wake(text):
-            #     speaking()
-
-        if quit(text):
-            break
-
-        if re.search('what are you', text) != None:
-            abbott_description()
-
-        if re.search('what time is it', text) != None:
-            tell_time()
 
     # except Exception as e:
     #     print("entering except")
     #     recognizer = speech_recognition.Recognizer()
     #     continue
+
+
